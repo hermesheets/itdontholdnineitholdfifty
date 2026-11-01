@@ -1,0 +1,253 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:itdontholdnineitholdfifty.ViewModels"
+        xmlns:models="using:itdontholdnineitholdfifty.Models"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1120" d:DesignHeight="900"
+        x:Class="itdontholdnineitholdfifty.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Word Steps — Russian"
+        Width="1120" Height="900"
+        MinWidth="850" MinHeight="650"
+        Background="#FFF6EFEA">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="PageBrush" Color="#FFF6EFEA" />
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFCF8" />
+        <SolidColorBrush x:Key="InkBrush" Color="#FF343B38" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#FF78766F" />
+        <SolidColorBrush x:Key="LineBrush" Color="#FFE8DDD5" />
+        <SolidColorBrush x:Key="BerryBrush" Color="#FFB95768" />
+        <SolidColorBrush x:Key="PeachBrush" Color="#FFE6A77E" />
+        <SolidColorBrush x:Key="MintBrush" Color="#FF648873" />
+        <SolidColorBrush x:Key="BlueBrush" Color="#FF60768D" />
+        <SolidColorBrush x:Key="LemonBrush" Color="#FF9B7939" />
+        <SolidColorBrush x:Key="LilacBrush" Color="#FF77739A" />
+        <SolidColorBrush x:Key="SoftBerryBrush" Color="#FFF6E3E5" />
+        <SolidColorBrush x:Key="SoftPeachBrush" Color="#FFF8E8DC" />
+        <SolidColorBrush x:Key="SoftMintBrush" Color="#FFE7EFE8" />
+        <SolidColorBrush x:Key="SoftBlueBrush" Color="#FFE8EDF2" />
+        <SolidColorBrush x:Key="SoftLemonBrush" Color="#FFF4EED8" />
+        <SolidColorBrush x:Key="SoftLilacBrush" Color="#FFEEEBF5" />
+        <SolidColorBrush x:Key="DangerBrush" Color="#FFAA5050" />
+        <LinearGradientBrush x:Key="QuizBackdropBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#FFF4C9C4" Offset="0" />
+            <GradientStop Color="#FFF4E2C3" Offset="0.52" />
+            <GradientStop Color="#FFD8E9DB" Offset="1" />
+        </LinearGradientBrush>
+    </Window.Resources>
+
+    <Grid Margin="26" RowDefinitions="Auto,*,Auto" Background="#FFF6EFEA">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+            <TextBlock Grid.Row="0" Text="Word Steps" FontSize="34" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+            <TextBlock Grid.Row="1" Text="Little words for everyday conversations" FontSize="16" Foreground="{StaticResource MutedBrush}" />
+            <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Background="{StaticResource SoftMintBrush}" CornerRadius="18" Padding="18,12" VerticalAlignment="Center">
+                <TextBlock Text="ENGLISH  →  РУССКИЙ" FontWeight="Bold" Foreground="{StaticResource MintBrush}" />
+            </Border>
+        </Grid>
+
+        <TabControl Grid.Row="1" Margin="0,18,0,14" Background="Transparent">
+            <TabItem Header="Home">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12" Spacing="20">
+                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
+                            <Border Grid.Column="0" Background="{StaticResource SoftMintBrush}" CornerRadius="16" Padding="18">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="YOUR WORDS" FontSize="12" FontWeight="Bold" Foreground="{StaticResource MintBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <TextBlock Text="{Binding WordCount}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                        <TextBlock Text="saved" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="{StaticResource SoftLemonBrush}" CornerRadius="16" Padding="18">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="QUIZ SCORE" FontSize="12" FontWeight="Bold" Foreground="{StaticResource LemonBrush}" />
+                                    <TextBlock Text="{Binding ScoreSummary}" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="{StaticResource SoftLilacBrush}" CornerRadius="16" Padding="18">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="ACCURACY" FontSize="12" FontWeight="Bold" Foreground="{StaticResource LilacBrush}" />
+                                    <TextBlock Text="{Binding AccuracyText}" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Background="{StaticResource SoftBerryBrush}" CornerRadius="20" Padding="22">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Ready for a little challenge?" FontSize="22" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                    <TextBlock Text="Practice one Russian word at a time. You get three tries on every question." TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="Start a quiz" Command="{Binding StartNewQuizCommand}" Background="{StaticResource BerryBrush}" Foreground="White" Padding="18,10" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <Grid ColumnDefinitions="1.1*,0.9*" ColumnSpacing="18">
+                            <StackPanel Grid.Column="0" Spacing="12">
+                                <TextBlock Text="Word library" FontSize="23" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                <TextBox Text="{Binding SearchText, Mode=TwoWay}" Watermark="Search English, Russian, or category" />
+                                <ListBox ItemsSource="{Binding Words}" SelectedItem="{Binding SelectedWord, Mode=TwoWay}" MaxHeight="460">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:VocabularyWord">
+                                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="12" Padding="14" Margin="0,0,0,7">
+                                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                                                    <TextBlock Grid.Row="0" Text="{Binding Word}" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Category}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Translation}" FontSize="15" Foreground="{StaticResource MintBrush}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Spacing="14">
+                                <Border Background="{StaticResource SoftMintBrush}" CornerRadius="18" Padding="20">
+                                    <StackPanel Spacing="11">
+                                        <TextBlock Text="Add a word" FontSize="21" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                        <TextBlock Text="Translate common words offline or enter your own Russian translation." TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" />
+                                        <TextBox Text="{Binding NewWord, Mode=TwoWay}" Watermark="English word or phrase" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBox Text="{Binding NewTranslation, Mode=TwoWay}" Watermark="Russian translation" HorizontalAlignment="Stretch" />
+                                            <Button Content="Translate" Command="{Binding TranslateNewWordCommand}" Background="{StaticResource SoftLemonBrush}" Foreground="{StaticResource LemonBrush}" />
+                                        </StackPanel>
+                                        <TextBox Text="{Binding NewExample, Mode=TwoWay}" Watermark="Example sentence (optional)" AcceptsReturn="True" MinHeight="60" TextWrapping="Wrap" />
+                                        <Button Content="Save to library" Command="{Binding AddWordCommand}" Background="{StaticResource MintBrush}" Foreground="White" HorizontalAlignment="Left" Padding="16,9" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="{StaticResource SoftLilacBrush}" CornerRadius="18" Padding="20">
+                                    <StackPanel Spacing="11">
+                                        <TextBlock Text="Edit selected word" FontSize="21" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                        <TextBox Text="{Binding EditWord, Mode=TwoWay}" Watermark="Select a word from the library" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBox Text="{Binding EditTranslation, Mode=TwoWay}" Watermark="Russian translation" HorizontalAlignment="Stretch" />
+                                            <Button Content="Translate" Command="{Binding TranslateEditWordCommand}" Background="{StaticResource SoftLemonBrush}" Foreground="{StaticResource LemonBrush}" />
+                                        </StackPanel>
+                                        <TextBox Text="{Binding EditExample, Mode=TwoWay}" Watermark="Example sentence" AcceptsReturn="True" MinHeight="60" TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="Save changes" Command="{Binding SaveSelectedWordCommand}" Background="{StaticResource LilacBrush}" Foreground="White" Padding="14,9" />
+                                            <Button Content="Remove word" Command="{Binding DeleteSelectedWordCommand}" Background="#FFFFE9E9" Foreground="{StaticResource DangerBrush}" Padding="14,9" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Quiz">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Border Margin="12" Background="{StaticResource QuizBackdropBrush}" CornerRadius="28" Padding="30">
+                        <StackPanel Spacing="22">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Spacing="5">
+                                    <TextBlock Text="A little Russian quiz" FontSize="29" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                    <TextBlock Text="Three tries, no rush. Learn a little every round." FontSize="16" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="New quiz" Command="{Binding StartNewQuizCommand}" Background="{StaticResource SurfaceBrush}" Foreground="{StaticResource BerryBrush}" Padding="18,10" VerticalAlignment="Center" />
+                            </Grid>
+
+                            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="#88FFFFFF" BorderThickness="1" CornerRadius="24" Padding="28">
+                                <Grid ColumnDefinitions="1.1*,0.9*" ColumnSpacing="30">
+                                    <StackPanel Grid.Column="0" Spacing="16" VerticalAlignment="Center">
+                                        <TextBlock Text="YOUR WORD" FontSize="12" FontWeight="Bold" Foreground="{StaticResource BerryBrush}" />
+                                        <TextBlock Text="{Binding CurrentCard.Word}" FontSize="48" FontWeight="Bold" Foreground="{StaticResource InkBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding CurrentCard.ExampleSentence}" FontSize="16" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding QuestionAttemptText}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource LilacBrush}" />
+                                        <ProgressBar Value="{Binding QuizTryProgressValue}" Maximum="100" Height="10" />
+                                    </StackPanel>
+
+                                    <Border Grid.Column="1" Background="{StaticResource SoftMintBrush}" CornerRadius="20" Padding="22" VerticalAlignment="Center">
+                                        <StackPanel Spacing="14">
+                                            <TextBlock Text="How do you say it in Russian?" FontSize="20" FontWeight="Bold" Foreground="{StaticResource InkBrush}" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding QuizAnswer, Mode=TwoWay}" Watermark="Type the Russian translation" />
+                                            <Button Content="Check answer" Command="{Binding SubmitQuizAnswerCommand}" Background="{StaticResource MintBrush}" Foreground="White" HorizontalAlignment="Left" Padding="18,10" />
+                                            <TextBlock Text="{Binding QuizFeedback}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" TextWrapping="Wrap" />
+                                            <Button Content="Next question" Command="{Binding NextCardCommand}" Background="{StaticResource BerryBrush}" Foreground="White" HorizontalAlignment="Left" Padding="18,10" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <Border Background="#CCFFFFFC" CornerRadius="16" Padding="18">
+                                <TextBlock Text="Every submitted answer counts toward your score. After three misses, the answer is shown and you can move on." TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Analytics">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12" Spacing="20">
+                        <StackPanel Spacing="5">
+                            <TextBlock Text="Your learning" FontSize="28" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                            <TextBlock Text="See what you know and which words could use another round." Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
+                            <Border Grid.Column="0" Background="{StaticResource SoftLemonBrush}" CornerRadius="16" Padding="18">
+                                <StackPanel Spacing="5">
+                                    <TextBlock Text="ANSWERS SUBMITTED" FontSize="12" FontWeight="Bold" Foreground="{StaticResource LemonBrush}" />
+                                    <TextBlock Text="{Binding QuestionsAnswered}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="{StaticResource SoftBerryBrush}" CornerRadius="16" Padding="18">
+                                <StackPanel Spacing="5">
+                                    <TextBlock Text="CORRECT ANSWERS" FontSize="12" FontWeight="Bold" Foreground="{StaticResource BerryBrush}" />
+                                    <TextBlock Text="{Binding CorrectAnswers}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Background="{StaticResource SoftBlueBrush}" CornerRadius="16" Padding="18">
+                                <StackPanel Spacing="5">
+                                    <TextBlock Text="OVERALL ACCURACY" FontSize="12" FontWeight="Bold" Foreground="{StaticResource BlueBrush}" />
+                                    <TextBlock Text="{Binding AccuracyText}" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="18" Padding="20">
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="Word coverage" FontSize="20" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding WordsPracticedText}" Foreground="{StaticResource MintBrush}" VerticalAlignment="Center" />
+                                </Grid>
+                                <ProgressBar Value="{Binding WordCoverageValue}" Maximum="100" Height="12" />
+                                <TextBlock Text="{Binding HardestWordText}" Foreground="{StaticResource MutedBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Progress by word" FontSize="22" FontWeight="Bold" Foreground="{StaticResource InkBrush}" />
+                            <ItemsControl ItemsSource="{Binding WordProgressItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:WordProgressItem">
+                                        <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="14" Padding="14" Margin="0,0,0,8">
+                                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+                                                <TextBlock Grid.Row="0" Text="{Binding Word}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AccuracyText}" FontWeight="Bold" Foreground="{StaticResource LilacBrush}" />
+                                                <TextBlock Grid.Row="1" Text="{Binding Translation}" Foreground="{StaticResource MintBrush}" />
+                                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ResultsText}" Foreground="{StaticResource MutedBrush}" />
+                                                <ProgressBar Grid.Row="2" Grid.ColumnSpan="2" Value="{Binding AccuracyValue}" Maximum="100" Height="7" Margin="0,8,0,0" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="2" Background="{StaticResource SoftLemonBrush}" CornerRadius="12" Padding="12">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource InkBrush}" TextWrapping="Wrap" />
+        </Border>
+    </Grid>
+</Window>

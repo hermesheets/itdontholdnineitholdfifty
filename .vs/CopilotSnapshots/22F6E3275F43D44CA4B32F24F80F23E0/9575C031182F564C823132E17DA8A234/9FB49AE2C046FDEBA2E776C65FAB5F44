@@ -1,0 +1,150 @@
+﻿using itdontholdnineitholdfifty.Models;
+using itdontholdnineitholdfifty.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace itdontholdnineitholdfifty.Data;
+
+public sealed class VocabularyRepository
+{
+    private static readonly IReadOnlyDictionary<string, string> LegacySpanishTranslations =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["hello"] = "hola",
+            ["goodbye"] = "adiós",
+            ["please"] = "por favor",
+            ["thank you"] = "gracias",
+            ["yes"] = "sí",
+            ["no"] = "no",
+            ["water"] = "agua",
+            ["food"] = "comida",
+            ["bread"] = "pan",
+            ["coffee"] = "café",
+            ["house"] = "casa",
+            ["bathroom"] = "baño",
+            ["today"] = "hoy",
+            ["tomorrow"] = "mañana",
+            ["friend"] = "amigo",
+            ["family"] = "familia",
+            ["good"] = "bueno",
+            ["help"] = "ayuda",
+            ["where"] = "dónde",
+            ["how much"] = "cuánto"
+        };
+
+    private readonly DbContextOptions<LanguageDbContext> _options;
+
+    private VocabularyRepository(DbContextOptions<LanguageDbContext> options)
+    {
+        _options = options;
+    }
+
+    public static async Task<VocabularyRepository> CreateAsync()
+    {
+        var appDataDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WordSteps");
+        Directory.CreateDirectory(appDataDirectory);
+
+        var databasePath = Path.Combine(appDataDirectory, "vocabulary.db");
+        var options = new DbContextOptionsBuilder<LanguageDbContext>()
+            .UseSqlite($"Data Source={databasePath}")
+            .Options;
+        var repository = new VocabularyRepository(options);
+
+        await using var context = repository.CreateContext();
+        await context.Database.EnsureCreatedAsync();
+        await context.Database.ExecuteSqlRawAsync(
+            "CREATE TABLE IF NOT EXISTS QuizProgress (Id INTEGER NOT NULL PRIMARY KEY, QuestionsAnswered INTEGER NOT NULL, CorrectAnswers INTEGER NOT NULL, LastPracticedUtc TEXT NULL)");
+
+        if (!await context.Words.AnyAsync())
+            context.Words.AddRange(CreateStarterWords());
+
+        var progress = await context.QuizProgress.FindAsync(1);
+        if (progress is null)
+            context.QuizProgress.Add(new QuizProgress());
+
+        var words = await context.Words.ToListAsync();
+        foreach (var word in words)
+        {
+            if (LegacySpanishTranslations.TryGetValue(word.Word, out var legacyTranslation) &&
+                string.Equals(word.Translation, legacyTranslation, StringComparison.OrdinalIgnoreCase) &&
+                OfflineTranslator.TryTranslate(word.Word, out var russianTranslation))
+                word.Translation = russianTranslation;
+        }
+
+        await context.SaveChangesAsync();
+        return repository;
+    }
+
+    public async Task<List<VocabularyWord>> GetWordsAsync()
+    {
+        await using var context = CreateContext();
+        return await context.Words
+            .AsNoTracking()
+            .OrderBy(word => word.Word)
+            .ToListAsync();
+    }
+
+    public async Task AddWordAsync(VocabularyWord word)
+    {
+        await using var context = CreateContext();
+        context.Words.Add(word);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task UpdateWordAsync(VocabularyWord word)
+    {
+        await using var context = CreateContext();
+        context.Words.Update(word);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task DeleteWordAsync(int id)
+    {
+        await using var context = CreateContext();
+        await context.Words.Where(word => word.Id == id).ExecuteDeleteAsync();
+    }
+
+    public async Task<QuizProgress> GetQuizProgressAsync()
+    {
+        await using var context = CreateContext();
+        return await context.QuizProgress.AsNoTracking().SingleAsync(progress => progress.Id == 1);
+    }
+
+    public async Task RecordQuizAnswerAsync(bool isCorrect)
+    {
+        await using var context = CreateContext();
+        var progress = await context.QuizProgress.SingleAsync(progress => progress.Id == 1);
+        progress.QuestionsAnswered++;
+        if (isCorrect)
+            progress.CorrectAnswers++;
+        progress.LastPracticedUtc = DateTime.UtcNow;
+        await context.SaveChangesAsync();
+    }
+
+    private LanguageDbContext CreateContext() => new(_options);
+
+    private static IEnumerable<VocabularyWord> CreateStarterWords() =>
+    [
+        new() { Word = "hello", Translation = "Привет", ExampleSentence = "Hello, how are you?", Category = "Greetings" },
+        new() { Word = "goodbye", Translation = "До свидания", ExampleSentence = "Goodbye, see you tomorrow.", Category = "Greetings" },
+        new() { Word = "please", Translation = "Пожалуйста", ExampleSentence = "A coffee, please.", Category = "Polite words" },
+        new() { Word = "thank you", Translation = "Спасибо", ExampleSentence = "Thank you for your help.", Category = "Polite words" },
+        new() { Word = "yes", Translation = "Да", ExampleSentence = "Yes, I understand.", Category = "Everyday" },
+        new() { Word = "no", Translation = "Нет", ExampleSentence = "No, thank you.", Category = "Everyday" },
+        new() { Word = "water", Translation = "Вода", ExampleSentence = "Can I have some water?", Category = "Food and drink" },
+        new() { Word = "food", Translation = "Еда", ExampleSentence = "The food is good.", Category = "Food and drink" },
+        new() { Word = "bread", Translation = "Хлеб", ExampleSentence = "I would like some bread.", Category = "Food and drink" },
+        new() { Word = "coffee", Translation = "Кофе", ExampleSentence = "I drink coffee in the morning.", Category = "Food and drink" },
+        new() { Word = "house", Translation = "Дом", ExampleSentence = "My house is small.", Category = "Places" },
+        new() { Word = "bathroom", Translation = "Туалет", ExampleSentence = "Where is the bathroom?", Category = "Places" },
+        new() { Word = "today", Translation = "Сегодня", ExampleSentence = "I am busy today.", Category = "Time" },
+        new() { Word = "tomorrow", Translation = "Завтра", ExampleSentence = "See you tomorrow.", Category = "Time" },
+        new() { Word = "friend", Translation = "Друг", ExampleSentence = "My friend is here.", Category = "People" },
+        new() { Word = "family", Translation = "Семья", ExampleSentence = "I love my family.", Category = "People" },
+        new() { Word = "good", Translation = "Хороший", ExampleSentence = "This is a good idea.", Category = "Everyday" },
+        new() { Word = "help", Translation = "Помощь", ExampleSentence = "Can you help me?", Category = "Everyday" },
+        new() { Word = "where", Translation = "Где", ExampleSentence = "Where are you?", Category = "Questions" },
+        new() { Word = "how much", Translation = "Сколько стоит", ExampleSentence = "How much does it cost?", Category = "Questions" }
+    ];
+}

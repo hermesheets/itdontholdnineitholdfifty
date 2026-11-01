@@ -1,0 +1,10 @@
+﻿using itdontholdnineitholdfifty.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace itdontholdnineitholdfifty.Data;
+
+public class LanguageDbContext(DbContextOptions<LanguageDbContext> options) : DbContext(options)
+{
+    public DbSet<VocabularyWord> Words => Set<VocabularyWord>();
+    public DbSet<QuizProgress> QuizProgress => Set<QuizProgress>();
+}

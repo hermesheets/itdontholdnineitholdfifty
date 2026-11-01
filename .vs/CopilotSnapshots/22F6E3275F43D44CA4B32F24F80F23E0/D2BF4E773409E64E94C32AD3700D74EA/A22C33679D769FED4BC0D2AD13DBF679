@@ -1,0 +1,442 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using itdontholdnineitholdfifty.Data;
+using itdontholdnineitholdfifty.Models;
+using itdontholdnineitholdfifty.Services;
+using System.Collections.ObjectModel;
+
+namespace itdontholdnineitholdfifty.ViewModels;
+
+public partial class MainWindowViewModel : ViewModelBase
+{
+    private readonly ObservableCollection<VocabularyWord> _allWords = [];
+    private VocabularyRepository? _repository;
+    private string _searchText = string.Empty;
+    private string _newWord = string.Empty;
+    private string _newTranslation = string.Empty;
+    private string _newExample = string.Empty;
+    private string _editWord = string.Empty;
+    private string _editTranslation = string.Empty;
+    private string _editExample = string.Empty;
+    private string _statusMessage = "Loading your words...";
+    private string _quizAnswer = string.Empty;
+    private string _quizFeedback = string.Empty;
+    private string _scoreSummary = "0 correct answers";
+    private string _accuracyText = "No quiz answers yet";
+    private VocabularyWord? _currentCard;
+    private VocabularyWord? _selectedWord;
+    private bool _isAnswerVisible;
+    private bool _isBusy;
+    private bool _hasAnsweredCurrentQuestion;
+    private int _questionsAnswered;
+    private int _correctAnswers;
+
+    public MainWindowViewModel()
+    {
+        ToggleAnswerCommand = new RelayCommand(ToggleAnswer);
+        NextCardCommand = new RelayCommand(NextCard);
+        TranslateNewWordCommand = new RelayCommand(TranslateNewWord);
+        TranslateEditWordCommand = new RelayCommand(TranslateEditWord);
+        AddWordCommand = new AsyncRelayCommand(AddWordAsync);
+        SaveSelectedWordCommand = new AsyncRelayCommand(SaveSelectedWordAsync, CanEditSelectedWord);
+        DeleteSelectedWordCommand = new AsyncRelayCommand(DeleteSelectedWordAsync, CanEditSelectedWord);
+        SubmitQuizAnswerCommand = new AsyncRelayCommand(SubmitQuizAnswerAsync, CanSubmitQuizAnswer);
+    }
+
+    public ObservableCollection<VocabularyWord> Words { get; } = [];
+    public IRelayCommand ToggleAnswerCommand { get; }
+    public IRelayCommand NextCardCommand { get; }
+    public IRelayCommand TranslateNewWordCommand { get; }
+    public IRelayCommand TranslateEditWordCommand { get; }
+    public IAsyncRelayCommand AddWordCommand { get; }
+    public IAsyncRelayCommand SaveSelectedWordCommand { get; }
+    public IAsyncRelayCommand DeleteSelectedWordCommand { get; }
+    public IAsyncRelayCommand SubmitQuizAnswerCommand { get; }
+    public int WordCount => _allWords.Count;
+    public string AnswerText => IsAnswerVisible
+        ? CurrentCard?.Translation ?? "No words to practice yet."
+        : "Use the quiz below, or show the translation.";
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetProperty(ref _searchText, value))
+                UpdateFilteredWords();
+        }
+    }
+
+    public string NewWord
+    {
+        get => _newWord;
+        set => SetProperty(ref _newWord, value);
+    }
+
+    public string NewTranslation
+    {
+        get => _newTranslation;
+        set => SetProperty(ref _newTranslation, value);
+    }
+
+    public string NewExample
+    {
+        get => _newExample;
+        set => SetProperty(ref _newExample, value);
+    }
+
+    public string EditWord
+    {
+        get => _editWord;
+        set => SetProperty(ref _editWord, value);
+    }
+
+    public string EditTranslation
+    {
+        get => _editTranslation;
+        set => SetProperty(ref _editTranslation, value);
+    }
+
+    public string EditExample
+    {
+        get => _editExample;
+        set => SetProperty(ref _editExample, value);
+    }
+
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        set => SetProperty(ref _statusMessage, value);
+    }
+
+    public string QuizAnswer
+    {
+        get => _quizAnswer;
+        set
+        {
+            if (SetProperty(ref _quizAnswer, value))
+                SubmitQuizAnswerCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string QuizFeedback
+    {
+        get => _quizFeedback;
+        set => SetProperty(ref _quizFeedback, value);
+    }
+
+    public string ScoreSummary
+    {
+        get => _scoreSummary;
+        private set => SetProperty(ref _scoreSummary, value);
+    }
+
+    public string AccuracyText
+    {
+        get => _accuracyText;
+        private set => SetProperty(ref _accuracyText, value);
+    }
+
+    public VocabularyWord? CurrentCard
+    {
+        get => _currentCard;
+        set
+        {
+            if (SetProperty(ref _currentCard, value))
+            {
+                OnPropertyChanged(nameof(AnswerText));
+                ResetQuizQuestion();
+            }
+        }
+    }
+
+    public VocabularyWord? SelectedWord
+    {
+        get => _selectedWord;
+        set
+        {
+            if (SetProperty(ref _selectedWord, value))
+            {
+                EditWord = value?.Word ?? string.Empty;
+                EditTranslation = value?.Translation ?? string.Empty;
+                EditExample = value?.ExampleSentence ?? string.Empty;
+                SaveSelectedWordCommand.NotifyCanExecuteChanged();
+                DeleteSelectedWordCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsAnswerVisible
+    {
+        get => _isAnswerVisible;
+        set
+        {
+            if (SetProperty(ref _isAnswerVisible, value))
+                OnPropertyChanged(nameof(AnswerText));
+        }
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set
+        {
+            if (SetProperty(ref _isBusy, value))
+            {
+                SaveSelectedWordCommand.NotifyCanExecuteChanged();
+                DeleteSelectedWordCommand.NotifyCanExecuteChanged();
+                SubmitQuizAnswerCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public async Task InitializeAsync()
+    {
+        try
+        {
+            _repository = await VocabularyRepository.CreateAsync();
+            var words = await _repository.GetWordsAsync();
+            _allWords.Clear();
+            foreach (var word in words)
+                _allWords.Add(word);
+
+            UpdateFilteredWords();
+            CurrentCard = _allWords.FirstOrDefault();
+            await RefreshQuizProgressAsync();
+            StatusMessage = $"Ready to learn: {_allWords.Count} everyday words.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not open your word list: {exception.Message}";
+        }
+    }
+
+    private void ToggleAnswer() => IsAnswerVisible = !IsAnswerVisible;
+
+    private void NextCard()
+    {
+        if (_allWords.Count == 0)
+        {
+            CurrentCard = null;
+            return;
+        }
+
+        ResetQuizQuestion();
+        var nextIndex = Random.Shared.Next(_allWords.Count);
+        if (_allWords.Count > 1 && _allWords[nextIndex].Id == CurrentCard?.Id)
+            nextIndex = (nextIndex + 1) % _allWords.Count;
+        CurrentCard = _allWords[nextIndex];
+    }
+
+    private void TranslateNewWord()
+    {
+        if (OfflineTranslator.TryTranslate(NewWord, out var translation))
+        {
+            NewTranslation = translation;
+            StatusMessage = "Offline translation found.";
+        }
+        else
+        {
+            StatusMessage = "This word is not in the offline dictionary. Enter its Russian translation manually.";
+        }
+    }
+
+    private void TranslateEditWord()
+    {
+        if (OfflineTranslator.TryTranslate(EditWord, out var translation))
+        {
+            EditTranslation = translation;
+            StatusMessage = "Offline translation found.";
+        }
+        else
+        {
+            StatusMessage = "This word is not in the offline dictionary. Enter its Russian translation manually.";
+        }
+    }
+
+    private async Task AddWordAsync()
+    {
+        var word = NewWord.Trim();
+        var translation = NewTranslation.Trim();
+        if (word.Length == 0 || translation.Length == 0)
+        {
+            StatusMessage = "Enter an English word and Russian translation first.";
+            return;
+        }
+
+        if (_repository is null)
+        {
+            StatusMessage = "The word list is not ready yet.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var newEntry = new VocabularyWord
+            {
+                Word = word,
+                Translation = translation,
+                ExampleSentence = NewExample.Trim(),
+                Category = "My words"
+            };
+
+            await _repository.AddWordAsync(newEntry);
+            _allWords.Add(newEntry);
+            UpdateFilteredWords();
+            CurrentCard ??= newEntry;
+            NewWord = string.Empty;
+            NewTranslation = string.Empty;
+            NewExample = string.Empty;
+            StatusMessage = $"Added “{word}” to your word list.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not save the word: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task SaveSelectedWordAsync()
+    {
+        var selected = SelectedWord;
+        if (selected is null || _repository is null)
+            return;
+
+        var word = EditWord.Trim();
+        var translation = EditTranslation.Trim();
+        if (word.Length == 0 || translation.Length == 0)
+        {
+            StatusMessage = "An English word and Russian translation are required.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            selected.Word = word;
+            selected.Translation = translation;
+            selected.ExampleSentence = EditExample.Trim();
+            await _repository.UpdateWordAsync(selected);
+            UpdateFilteredWords();
+            SelectedWord = selected;
+            StatusMessage = $"Updated “{word}”.;
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not update the word: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task DeleteSelectedWordAsync()
+    {
+        var selected = SelectedWord;
+        if (selected is null || _repository is null)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            await _repository.DeleteWordAsync(selected.Id);
+            _allWords.Remove(selected);
+            if (CurrentCard?.Id == selected.Id)
+                CurrentCard = _allWords.FirstOrDefault();
+            SelectedWord = null;
+            UpdateFilteredWords();
+            StatusMessage = $"Removed “{selected.Word}”.;
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not remove the word: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task SubmitQuizAnswerAsync()
+    {
+        if (!CanSubmitQuizAnswer() || CurrentCard is null || _repository is null)
+            return;
+
+        var isCorrect = string.Equals(
+            QuizAnswer.Trim(),
+            CurrentCard.Translation.Trim(),
+            StringComparison.OrdinalIgnoreCase);
+
+        IsBusy = true;
+        try
+        {
+            await _repository.RecordQuizAnswerAsync(isCorrect);
+            _hasAnsweredCurrentQuestion = true;
+            QuizFeedback = isCorrect
+                ? "Correct! Отлично!"
+                : $"Not quite. The answer is {CurrentCard.Translation}.";
+            QuizAnswer = string.Empty;
+            await RefreshQuizProgressAsync();
+        }
+        catch (Exception exception)
+        {
+            QuizFeedback = $"Could not save your score: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            SubmitQuizAnswerCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanEditSelectedWord() => SelectedWord is not null && !IsBusy;
+
+    private bool CanSubmitQuizAnswer() =>
+        CurrentCard is not null &&
+        !IsBusy &&
+        !_hasAnsweredCurrentQuestion &&
+        !string.IsNullOrWhiteSpace(QuizAnswer);
+
+    private async Task RefreshQuizProgressAsync()
+    {
+        if (_repository is null)
+            return;
+
+        var progress = await _repository.GetQuizProgressAsync();
+        _questionsAnswered = progress.QuestionsAnswered;
+        _correctAnswers = progress.CorrectAnswers;
+        ScoreSummary = $"{_correctAnswers} correct of {_questionsAnswered} answers";
+        AccuracyText = _questionsAnswered == 0
+            ? "No quiz answers yet"
+            : $"{(double)_correctAnswers / _questionsAnswered:P0} accuracy";
+    }
+
+    private void ResetQuizQuestion()
+    {
+        _hasAnsweredCurrentQuestion = false;
+        QuizAnswer = string.Empty;
+        QuizFeedback = string.Empty;
+        IsAnswerVisible = false;
+        SubmitQuizAnswerCommand.NotifyCanExecuteChanged();
+    }
+
+    private void UpdateFilteredWords()
+    {
+        var search = SearchText.Trim();
+        var matches = _allWords.Where(word =>
+            word.Word.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            word.Translation.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            word.Category.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+        Words.Clear();
+        foreach (var word in matches)
+            Words.Add(word);
+
+        OnPropertyChanged(nameof(WordCount));
+    }
+}

@@ -1,0 +1,80 @@
+﻿using itdontholdnineitholdfifty.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace itdontholdnineitholdfifty.Data;
+
+public sealed class VocabularyRepository
+{
+    private readonly DbContextOptions<LanguageDbContext> _options;
+
+    private VocabularyRepository(DbContextOptions<LanguageDbContext> options)
+    {
+        _options = options;
+    }
+
+    public static async Task<VocabularyRepository> CreateAsync()
+    {
+        var appDataDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WordSteps");
+        Directory.CreateDirectory(appDataDirectory);
+
+        var databasePath = Path.Combine(appDataDirectory, "vocabulary.db");
+        var options = new DbContextOptionsBuilder<LanguageDbContext>()
+            .UseSqlite($"Data Source={databasePath}")
+            .Options;
+        var repository = new VocabularyRepository(options);
+
+        await using var context = repository.CreateContext();
+        await context.Database.EnsureCreatedAsync();
+        if (!await context.Words.AnyAsync())
+        {
+            context.Words.AddRange(CreateStarterWords());
+            await context.SaveChangesAsync();
+        }
+
+        return repository;
+    }
+
+    public async Task<List<VocabularyWord>> GetWordsAsync()
+    {
+        await using var context = CreateContext();
+        return await context.Words
+            .AsNoTracking()
+            .OrderBy(word => word.Word)
+            .ToListAsync();
+    }
+
+    public async Task AddWordAsync(VocabularyWord word)
+    {
+        await using var context = CreateContext();
+        context.Words.Add(word);
+        await context.SaveChangesAsync();
+    }
+
+    private LanguageDbContext CreateContext() => new(_options);
+
+    private static IEnumerable<VocabularyWord> CreateStarterWords() =>
+    [
+        new() { Word = "hello", Translation = "hola", ExampleSentence = "Hello, how are you?", Category = "Greetings" },
+        new() { Word = "goodbye", Translation = "adiós", ExampleSentence = "Goodbye, see you tomorrow.", Category = "Greetings" },
+        new() { Word = "please", Translation = "por favor", ExampleSentence = "A coffee, please.", Category = "Polite words" },
+        new() { Word = "thank you", Translation = "gracias", ExampleSentence = "Thank you for your help.", Category = "Polite words" },
+        new() { Word = "yes", Translation = "sí", ExampleSentence = "Yes, I understand.", Category = "Everyday" },
+        new() { Word = "no", Translation = "no", ExampleSentence = "No, thank you.", Category = "Everyday" },
+        new() { Word = "water", Translation = "agua", ExampleSentence = "Can I have some water?", Category = "Food and drink" },
+        new() { Word = "food", Translation = "comida", ExampleSentence = "The food is good.", Category = "Food and drink" },
+        new() { Word = "bread", Translation = "pan", ExampleSentence = "I would like some bread.", Category = "Food and drink" },
+        new() { Word = "coffee", Translation = "café", ExampleSentence = "I drink coffee in the morning.", Category = "Food and drink" },
+        new() { Word = "house", Translation = "casa", ExampleSentence = "My house is small.", Category = "Places" },
+        new() { Word = "bathroom", Translation = "baño", ExampleSentence = "Where is the bathroom?", Category = "Places" },
+        new() { Word = "today", Translation = "hoy", ExampleSentence = "I am busy today.", Category = "Time" },
+        new() { Word = "tomorrow", Translation = "mañana", ExampleSentence = "See you tomorrow.", Category = "Time" },
+        new() { Word = "friend", Translation = "amigo", ExampleSentence = "My friend is here.", Category = "People" },
+        new() { Word = "family", Translation = "familia", ExampleSentence = "I love my family.", Category = "People" },
+        new() { Word = "good", Translation = "bueno", ExampleSentence = "This is a good idea.", Category = "Everyday" },
+        new() { Word = "help", Translation = "ayuda", ExampleSentence = "Can you help me?", Category = "Everyday" },
+        new() { Word = "where", Translation = "dónde", ExampleSentence = "Where are you?", Category = "Questions" },
+        new() { Word = "how much", Translation = "cuánto", ExampleSentence = "How much does it cost?", Category = "Questions" }
+    ];
+}

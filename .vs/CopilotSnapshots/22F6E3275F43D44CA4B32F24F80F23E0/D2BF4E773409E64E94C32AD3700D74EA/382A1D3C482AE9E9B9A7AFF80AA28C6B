@@ -1,0 +1,72 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:itdontholdnineitholdfifty.ViewModels"
+        xmlns:models="using:itdontholdnineitholdfifty.Models"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="760"
+        x:Class="itdontholdnineitholdfifty.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Word Steps"
+        Width="1000" Height="760"
+        MinWidth="800" MinHeight="600">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32" Spacing="20">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Word Steps" FontSize="30" FontWeight="Bold" />
+                <TextBlock Text="Small words. Everyday conversations." FontSize="16" Opacity="0.7" />
+            </StackPanel>
+
+            <Border Padding="20" CornerRadius="12" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+                <StackPanel Spacing="14">
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="Practice a word" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="English → Spanish" Opacity="0.7" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding CurrentCard.Word}" FontSize="32" FontWeight="Bold" />
+                    <TextBlock Text="{Binding CurrentCard.ExampleSentence}" FontSize="16" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding AnswerText}" FontSize="18" FontWeight="SemiBold" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Show / hide answer" Command="{Binding ToggleAnswerCommand}" />
+                        <Button Content="Next word" Command="{Binding NextCardCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="20">
+                <StackPanel Grid.Column="0" Spacing="12">
+                    <TextBlock Text="My words" FontSize="20" FontWeight="SemiBold" />
+                    <TextBox Text="{Binding SearchText, Mode=TwoWay}" Watermark="Search words or translations" />
+                    <TextBlock Text="{Binding WordCount}" Opacity="0.7" />
+                    <TextBlock Text="words saved" Opacity="0.7" />
+                    <ItemsControl ItemsSource="{Binding Words}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="models:VocabularyWord">
+                                <Border Padding="12" Margin="0,0,0,8" CornerRadius="8" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+                                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                                        <TextBlock Grid.Row="0" Text="{Binding Word}" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Category}" Opacity="0.7" />
+                                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Translation}" Opacity="0.8" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Spacing="12">
+                    <TextBlock Text="Add a word" FontSize="20" FontWeight="SemiBold" />
+                    <TextBlock Text="Add a word you want to remember." Opacity="0.7" />
+                    <TextBox Text="{Binding NewWord, Mode=TwoWay}" Watermark="Word in English" />
+                    <TextBox Text="{Binding NewTranslation, Mode=TwoWay}" Watermark="Spanish translation" />
+                    <TextBox Text="{Binding NewExample, Mode=TwoWay}" Watermark="Example sentence (optional)" AcceptsReturn="True" MinHeight="72" TextWrapping="Wrap" />
+                    <Button Content="Save word" Command="{Binding AddWordCommand}" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Opacity="0.8" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

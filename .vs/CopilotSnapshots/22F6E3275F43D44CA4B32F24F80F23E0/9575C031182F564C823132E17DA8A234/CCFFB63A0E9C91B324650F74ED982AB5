@@ -1,0 +1,74 @@
+﻿namespace itdontholdnineitholdfifty.Services;
+
+public static class OfflineTranslator
+{
+    private static readonly IReadOnlyDictionary<string, string> Translations =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["hello"] = "Привет",
+            ["goodbye"] = "До свидания",
+            ["good morning"] = "Доброе утро",
+            ["good evening"] = "Добрый вечер",
+            ["how are you"] = "Как дела?",
+            ["please"] = "Пожалуйста",
+            ["thank you"] = "Спасибо",
+            ["excuse me"] = "Извините",
+            ["sorry"] = "Извините",
+            ["yes"] = "Да",
+            ["no"] = "Нет",
+            ["water"] = "Вода",
+            ["food"] = "Еда",
+            ["bread"] = "Хлеб",
+            ["coffee"] = "Кофе",
+            ["tea"] = "Чай",
+            ["house"] = "Дом",
+            ["bathroom"] = "Туалет",
+            ["today"] = "Сегодня",
+            ["tomorrow"] = "Завтра",
+            ["friend"] = "Друг",
+            ["family"] = "Семья",
+            ["good"] = "Хороший",
+            ["help"] = "Помощь",
+            ["where"] = "Где",
+            ["how much"] = "Сколько стоит",
+            ["I"] = "Я",
+            ["you"] = "Ты",
+            ["we"] = "Мы",
+            ["they"] = "Они",
+            ["love"] = "Любовь",
+            ["eat"] = "Есть",
+            ["drink"] = "Пить",
+            ["book"] = "Книга",
+            ["school"] = "Школа",
+            ["work"] = "Работа",
+            ["car"] = "Машина",
+            ["bus"] = "Автобус",
+            ["train"] = "Поезд",
+            ["small"] = "Маленький",
+            ["big"] = "Большой",
+            ["beautiful"] = "Красивый",
+            ["happy"] = "Счастливый",
+            ["time"] = "Время",
+            ["money"] = "Деньги",
+            ["shop"] = "Магазин",
+            ["one"] = "Один",
+            ["two"] = "Два",
+            ["three"] = "Три",
+            ["four"] = "Четыре",
+            ["five"] = "Пять",
+            ["I don't understand"] = "Я не понимаю"
+        };
+
+    public static bool TryTranslate(string? englishWord, out string russianTranslation)
+    {
+        var normalizedWord = englishWord?.Trim();
+        if (!string.IsNullOrEmpty(normalizedWord) && Translations.TryGetValue(normalizedWord, out var translation))
+        {
+            russianTranslation = translation;
+            return true;
+        }
+
+        russianTranslation = string.Empty;
+        return false;
+    }
+}

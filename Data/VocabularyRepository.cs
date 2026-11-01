@@ -1,0 +1,170 @@
+using itdontholdnineitholdfifty.Models;
+using itdontholdnineitholdfifty.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace itdontholdnineitholdfifty.Data;
+
+public sealed class VocabularyRepository
+{
+    private static readonly IReadOnlyDictionary<string, string> LegacySpanishTranslations =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["hello"] = "hola",
+            ["goodbye"] = "adiós",
+            ["please"] = "por favor",
+            ["thank you"] = "gracias",
+            ["yes"] = "sí",
+            ["no"] = "no",
+            ["water"] = "agua",
+            ["food"] = "comida",
+            ["bread"] = "pan",
+            ["coffee"] = "café",
+            ["house"] = "casa",
+            ["bathroom"] = "baño",
+            ["today"] = "hoy",
+            ["tomorrow"] = "mañana",
+            ["friend"] = "amigo",
+            ["family"] = "familia",
+            ["good"] = "bueno",
+            ["help"] = "ayuda",
+            ["where"] = "dónde",
+            ["how much"] = "cuánto"
+        };
+
+    private readonly DbContextOptions<LanguageDbContext> _options;
+
+    private VocabularyRepository(DbContextOptions<LanguageDbContext> options)
+    {
+        _options = options;
+    }
+
+    public static async Task<VocabularyRepository> CreateAsync()
+    {
+        var appDataDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WordSteps");
+        Directory.CreateDirectory(appDataDirectory);
+
+        var databasePath = Path.Combine(appDataDirectory, "vocabulary.db");
+        var seedMarkerPath = Path.Combine(appDataDirectory, "starter-words-v2.imported");
+        var shouldImportStarterWords = !File.Exists(seedMarkerPath);
+        var options = new DbContextOptionsBuilder<LanguageDbContext>()
+            .UseSqlite($"Data Source={databasePath}")
+            .Options;
+        var repository = new VocabularyRepository(options);
+
+        await using var context = repository.CreateContext();
+        await context.Database.EnsureCreatedAsync();
+        await context.Database.ExecuteSqlRawAsync(
+            "CREATE TABLE IF NOT EXISTS QuizProgress (Id INTEGER NOT NULL PRIMARY KEY, QuestionsAnswered INTEGER NOT NULL, CorrectAnswers INTEGER NOT NULL, LastPracticedUtc TEXT NULL)");
+        await context.Database.ExecuteSqlRawAsync(
+            "CREATE TABLE IF NOT EXISTS WordQuizStats (VocabularyWordId INTEGER NOT NULL PRIMARY KEY, Attempts INTEGER NOT NULL, Correct INTEGER NOT NULL, LastAttemptUtc TEXT NULL, FOREIGN KEY (VocabularyWordId) REFERENCES Words (Id) ON DELETE CASCADE)");
+
+        var progress = await context.QuizProgress.FindAsync(1);
+        if (progress is null)
+            context.QuizProgress.Add(new QuizProgress());
+
+        var existingWords = await context.Words.ToListAsync();
+        foreach (var word in existingWords)
+        {
+            if (LegacySpanishTranslations.TryGetValue(word.Word, out var legacyTranslation) &&
+                string.Equals(word.Translation, legacyTranslation, StringComparison.OrdinalIgnoreCase) &&
+                OfflineTranslator.TryTranslate(word.Word, out var russianTranslation))
+                word.Translation = russianTranslation;
+        }
+
+        if (shouldImportStarterWords)
+        {
+            var knownWords = existingWords
+                .Select(word => word.Word)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in OfflineTranslator.Entries)
+            {
+                if (knownWords.Add(entry.Key))
+                {
+                    context.Words.Add(new VocabularyWord
+                    {
+                        Word = entry.Key,
+                        Translation = entry.Value,
+                        Category = "Beginner"
+                    });
+                }
+            }
+        }
+
+        await context.SaveChangesAsync();
+        if (shouldImportStarterWords)
+            await File.WriteAllTextAsync(seedMarkerPath, "imported");
+
+        return repository;
+    }
+
+    public async Task<List<VocabularyWord>> GetWordsAsync()
+    {
+        await using var context = CreateContext();
+        return await context.Words
+            .AsNoTracking()
+            .OrderBy(word => word.Word)
+            .ToListAsync();
+    }
+
+    public async Task AddWordAsync(VocabularyWord word)
+    {
+        await using var context = CreateContext();
+        context.Words.Add(word);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task UpdateWordAsync(VocabularyWord word)
+    {
+        await using var context = CreateContext();
+        context.Words.Update(word);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task DeleteWordAsync(int id)
+    {
+        await using var context = CreateContext();
+        await context.WordQuizStats.Where(stat => stat.VocabularyWordId == id).ExecuteDeleteAsync();
+        await context.Words.Where(word => word.Id == id).ExecuteDeleteAsync();
+    }
+
+    public async Task<QuizProgress> GetQuizProgressAsync()
+    {
+        await using var context = CreateContext();
+        return await context.QuizProgress.AsNoTracking().SingleAsync(progress => progress.Id == 1);
+    }
+
+    public async Task<List<WordQuizStat>> GetWordQuizStatsAsync()
+    {
+        await using var context = CreateContext();
+        return await context.WordQuizStats.AsNoTracking().ToListAsync();
+    }
+
+    public async Task RecordQuizAnswerAsync(int wordId, bool isCorrect)
+    {
+        await using var context = CreateContext();
+        var progress = await context.QuizProgress.SingleAsync(progress => progress.Id == 1);
+        var wordProgress = await context.WordQuizStats.FindAsync(wordId);
+        if (wordProgress is null)
+        {
+            wordProgress = new WordQuizStat { VocabularyWordId = wordId };
+            context.WordQuizStats.Add(wordProgress);
+        }
+
+        progress.QuestionsAnswered++;
+        wordProgress.Attempts++;
+        if (isCorrect)
+        {
+            progress.CorrectAnswers++;
+            wordProgress.Correct++;
+        }
+
+        progress.LastPracticedUtc = DateTime.UtcNow;
+        wordProgress.LastAttemptUtc = progress.LastPracticedUtc;
+        await context.SaveChangesAsync();
+    }
+
+    private LanguageDbContext CreateContext() => new(_options);
+}
