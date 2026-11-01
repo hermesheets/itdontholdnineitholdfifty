@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace itdontholdnineitholdfifty.Data;
 
-public sealed class VocabularyRepository
+public sealed class VocabularyRepository : IVocabularyRepository
 {
     private static readonly IReadOnlyDictionary<string, string> LegacySpanishTranslations =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

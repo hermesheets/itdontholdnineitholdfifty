@@ -1,0 +1,131 @@
+using CommunityToolkit.Mvvm.Input;
+using itdontholdnineitholdfifty.Data;
+using itdontholdnineitholdfifty.Models;
+using itdontholdnineitholdfifty.Services;
+using System.Collections.ObjectModel;
+
+namespace itdontholdnineitholdfifty.ViewModels;
+
+public sealed class QuizViewModel : ViewModelBase
+{
+    public const int MaxQuizTries = 3;
+    private readonly IVocabularyRepository _repository;
+    private readonly ILearningService _learningService;
+    private readonly ObservableCollection<VocabularyWord> _allWords = [];
+    private VocabularyWord? _currentCard;
+    private string _quizAnswer = string.Empty;
+    private string _quizFeedback = string.Empty;
+    private bool _isAnswerVisible;
+    private bool _isBusy;
+    private bool _isQuestionComplete;
+    private int _questionAttemptCount;
+
+    public IRelayCommand ToggleAnswerCommand { get; }
+    public IRelayCommand NextCardCommand { get; }
+    public IRelayCommand StartNewQuizCommand { get; }
+    public IAsyncRelayCommand SubmitQuizAnswerCommand { get; }
+    public VocabularyWord? CurrentCard { get => _currentCard; private set { if (SetProperty(ref _currentCard, value)) { OnPropertyChanged(nameof(QuestionAttemptText)); ResetQuestion(); } } }
+    public string QuizAnswer { get => _quizAnswer; set { if (SetProperty(ref _quizAnswer, value)) SubmitQuizAnswerCommand.NotifyCanExecuteChanged(); } }
+    public string QuizFeedback { get => _quizFeedback; private set => SetProperty(ref _quizFeedback, value); }
+    public bool IsAnswerVisible { get => _isAnswerVisible; private set { if (SetProperty(ref _isAnswerVisible, value)) OnPropertyChanged(nameof(AnswerText)); } }
+    public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) { SubmitQuizAnswerCommand.NotifyCanExecuteChanged(); NextCardCommand.NotifyCanExecuteChanged(); } } }
+    public string QuestionAttemptText => CurrentCard is null ? "No words to quiz yet" : _isQuestionComplete ? $"{_questionAttemptCount} of {MaxQuizTries} tries used" : $"Try {_questionAttemptCount + 1} of {MaxQuizTries}";
+    public double QuizTryProgressValue => (double)_questionAttemptCount / MaxQuizTries * 100;
+    public string AnswerText => IsAnswerVisible ? CurrentCard?.Translation ?? "No words to practice yet." : "Choose the Russian translation in the Quiz screen.";
+
+    public QuizViewModel(IVocabularyRepository repository, ILearningService learningService)
+    {
+        _repository = repository;
+        _learningService = learningService;
+        ToggleAnswerCommand = new RelayCommand(ToggleAnswer);
+        NextCardCommand = new RelayCommand(NextCard, CanMoveToNextCard);
+        StartNewQuizCommand = new RelayCommand(StartNewQuiz, () => _allWords.Count > 0 && !IsBusy);
+        SubmitQuizAnswerCommand = new AsyncRelayCommand(SubmitQuizAnswerAsync, CanSubmitQuizAnswer);
+    }
+
+    public async Task RefreshAsync()
+    {
+        _allWords.Clear();
+        foreach (var word in await _repository.GetWordsAsync())
+            _allWords.Add(word);
+        StartNewQuizCommand.NotifyCanExecuteChanged();
+        if (_allWords.Count > 0 && CurrentCard is null)
+            CurrentCard = _allWords[0];
+        else if (CurrentCard is not null)
+            CurrentCard = _allWords.FirstOrDefault(word => word.Id == CurrentCard.Id);
+        if (CurrentCard is null && _allWords.Count > 0)
+            CurrentCard = _allWords[0];
+    }
+
+    private void ToggleAnswer() => IsAnswerVisible = !IsAnswerVisible;
+
+    private void StartNewQuiz()
+    {
+        if (_allWords.Count > 0)
+            CurrentCard = _allWords[Random.Shared.Next(_allWords.Count)];
+    }
+
+    private void NextCard()
+    {
+        if (!CanMoveToNextCard() || _allWords.Count == 0)
+            return;
+
+        var nextIndex = Random.Shared.Next(_allWords.Count);
+        if (_allWords.Count > 1 && _allWords[nextIndex].Id == CurrentCard?.Id)
+            nextIndex = (nextIndex + 1) % _allWords.Count;
+        CurrentCard = _allWords[nextIndex];
+    }
+
+    private async Task SubmitQuizAnswerAsync()
+    {
+        if (!CanSubmitQuizAnswer() || CurrentCard is null)
+            return;
+
+        var word = CurrentCard;
+        var isCorrect = string.Equals(QuizAnswer.Trim(), word.Translation.Trim(), StringComparison.OrdinalIgnoreCase);
+        IsBusy = true;
+        try
+        {
+            await _learningService.RecordAnswerAsync(word.Id, isCorrect);
+            _questionAttemptCount++;
+            if (isCorrect)
+            {
+                _isQuestionComplete = true;
+                QuizFeedback = "That's right! Nice work.";
+            }
+            else if (_questionAttemptCount >= MaxQuizTries)
+            {
+                _isQuestionComplete = true;
+                IsAnswerVisible = true;
+                QuizFeedback = $"The answer is {word.Translation}. Choose Next question when you're ready.";
+            }
+            else
+                QuizFeedback = $"Not quite. Try again — {MaxQuizTries - _questionAttemptCount} tries left.";
+
+            QuizAnswer = string.Empty;
+            OnPropertyChanged(nameof(QuestionAttemptText));
+            OnPropertyChanged(nameof(QuizTryProgressValue));
+            NextCardCommand.NotifyCanExecuteChanged();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanSubmitQuizAnswer() => CurrentCard is not null && !IsBusy && !_isQuestionComplete && !string.IsNullOrWhiteSpace(QuizAnswer);
+    private bool CanMoveToNextCard() => CurrentCard is not null && _isQuestionComplete && !IsBusy;
+
+    private void ResetQuestion()
+    {
+        _questionAttemptCount = 0;
+        _isQuestionComplete = false;
+        QuizAnswer = string.Empty;
+        QuizFeedback = string.Empty;
+        IsAnswerVisible = false;
+        OnPropertyChanged(nameof(QuestionAttemptText));
+        OnPropertyChanged(nameof(QuizTryProgressValue));
+        SubmitQuizAnswerCommand?.NotifyCanExecuteChanged();
+        NextCardCommand?.NotifyCanExecuteChanged();
+    }
+}

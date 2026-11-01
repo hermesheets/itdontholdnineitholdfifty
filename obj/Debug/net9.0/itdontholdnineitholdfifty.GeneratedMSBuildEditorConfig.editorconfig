@@ -27,5 +27,23 @@ build_property.EnableCodeStyleSeverity =
 [C:/Users/User/source/repos/itdontholdnineitholdfifty/App.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
+[C:/Users/User/source/repos/itdontholdnineitholdfifty/Views/AnalyticsView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/Users/User/source/repos/itdontholdnineitholdfifty/Views/DashboardView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/Users/User/source/repos/itdontholdnineitholdfifty/Views/LibraryView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
 [C:/Users/User/source/repos/itdontholdnineitholdfifty/Views/MainWindow.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/Users/User/source/repos/itdontholdnineitholdfifty/Views/QuizView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/Users/User/source/repos/itdontholdnineitholdfifty/Views/ReviewView.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[C:/Users/User/source/repos/itdontholdnineitholdfifty/Views/StudyPlanView.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml

@@ -1,0 +1,172 @@
+using CommunityToolkit.Mvvm.Input;
+using itdontholdnineitholdfifty.Data;
+using itdontholdnineitholdfifty.Models;
+using itdontholdnineitholdfifty.Services;
+using System.Collections.ObjectModel;
+
+namespace itdontholdnineitholdfifty.ViewModels;
+
+public sealed class LibraryViewModel : ViewModelBase
+{
+    private readonly IVocabularyRepository _repository;
+    private readonly ITranslationService _translationService;
+    private readonly ObservableCollection<VocabularyWord> _allWords = [];
+    private string _searchText = string.Empty;
+    private string _newWord = string.Empty;
+    private string _newTranslation = string.Empty;
+    private string _newExample = string.Empty;
+    private string _editWord = string.Empty;
+    private string _editTranslation = string.Empty;
+    private string _editExample = string.Empty;
+    private string _statusMessage = "";
+    private VocabularyWord? _selectedWord;
+    private bool _isBusy;
+
+    public ObservableCollection<VocabularyWord> Words { get; } = [];
+    public IAsyncRelayCommand AddWordCommand { get; }
+    public IAsyncRelayCommand SaveSelectedWordCommand { get; }
+    public IAsyncRelayCommand DeleteSelectedWordCommand { get; }
+    public IRelayCommand TranslateNewWordCommand { get; }
+    public IRelayCommand TranslateEditWordCommand { get; }
+    public Func<Task>? DataChanged { get; set; }
+    public string SearchText { get => _searchText; set { if (SetProperty(ref _searchText, value)) UpdateFilteredWords(); } }
+    public string NewWord { get => _newWord; set => SetProperty(ref _newWord, value); }
+    public string NewTranslation { get => _newTranslation; set => SetProperty(ref _newTranslation, value); }
+    public string NewExample { get => _newExample; set => SetProperty(ref _newExample, value); }
+    public string EditWord { get => _editWord; set => SetProperty(ref _editWord, value); }
+    public string EditTranslation { get => _editTranslation; set => SetProperty(ref _editTranslation, value); }
+    public string EditExample { get => _editExample; set => SetProperty(ref _editExample, value); }
+    public string StatusMessage { get => _statusMessage; private set => SetProperty(ref _statusMessage, value); }
+    public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) { SaveSelectedWordCommand.NotifyCanExecuteChanged(); DeleteSelectedWordCommand.NotifyCanExecuteChanged(); } } }
+    public VocabularyWord? SelectedWord { get => _selectedWord; set { if (SetProperty(ref _selectedWord, value)) { EditWord = value?.Word ?? ""; EditTranslation = value?.Translation ?? ""; EditExample = value?.ExampleSentence ?? ""; SaveSelectedWordCommand.NotifyCanExecuteChanged(); DeleteSelectedWordCommand.NotifyCanExecuteChanged(); } } }
+
+    public LibraryViewModel(IVocabularyRepository repository, ITranslationService translationService)
+    {
+        _repository = repository;
+        _translationService = translationService;
+        AddWordCommand = new AsyncRelayCommand(AddWordAsync);
+        SaveSelectedWordCommand = new AsyncRelayCommand(SaveSelectedWordAsync, CanEditSelectedWord);
+        DeleteSelectedWordCommand = new AsyncRelayCommand(DeleteSelectedWordAsync, CanEditSelectedWord);
+        TranslateNewWordCommand = new RelayCommand(TranslateNewWord);
+        TranslateEditWordCommand = new RelayCommand(TranslateEditWord);
+    }
+
+    public async Task RefreshAsync()
+    {
+        var selectedId = SelectedWord?.Id;
+        _allWords.Clear();
+        foreach (var word in await _repository.GetWordsAsync())
+            _allWords.Add(word);
+        UpdateFilteredWords();
+        SelectedWord = selectedId is null ? null : _allWords.FirstOrDefault(word => word.Id == selectedId);
+    }
+
+    private void TranslateNewWord() => ApplyTranslation(NewWord, value => NewTranslation = value);
+    private void TranslateEditWord() => ApplyTranslation(EditWord, value => EditTranslation = value);
+
+    private void ApplyTranslation(string word, Action<string> setTranslation)
+    {
+        var translated = _translationService.TryTranslate(word, out var translation);
+        if (translated)
+            setTranslation(translation);
+        StatusMessage = translated ? "Offline translation found." : "Enter the Russian translation manually.";
+    }
+
+    private async Task AddWordAsync()
+    {
+        var word = NewWord.Trim();
+        var translation = NewTranslation.Trim();
+        if (word.Length == 0 || translation.Length == 0)
+        {
+            StatusMessage = "Enter an English word and Russian translation first.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await _repository.AddWordAsync(new VocabularyWord
+            {
+                Word = word,
+                Translation = translation,
+                ExampleSentence = NewExample.Trim(),
+                Category = "My words"
+            });
+            NewWord = NewTranslation = NewExample = string.Empty;
+            await RefreshAsync();
+            StatusMessage = $"Added “{word}” to your word list.";
+            if (DataChanged is not null)
+                await DataChanged();
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not save the word: {exception.Message}";
+        }
+        finally { IsBusy = false; }
+    }
+
+    private async Task SaveSelectedWordAsync()
+    {
+        if (SelectedWord is not { } selected)
+            return;
+        var word = EditWord.Trim();
+        var translation = EditTranslation.Trim();
+        if (word.Length == 0 || translation.Length == 0)
+        {
+            StatusMessage = "An English word and Russian translation are required.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            selected.Word = word;
+            selected.Translation = translation;
+            selected.ExampleSentence = EditExample.Trim();
+            await _repository.UpdateWordAsync(selected);
+            await RefreshAsync();
+            StatusMessage = $"Updated “{word}”.";
+            if (DataChanged is not null)
+                await DataChanged();
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not update the word: {exception.Message}";
+        }
+        finally { IsBusy = false; }
+    }
+
+    private async Task DeleteSelectedWordAsync()
+    {
+        if (SelectedWord is not { } selected)
+            return;
+        IsBusy = true;
+        try
+        {
+            await _repository.DeleteWordAsync(selected.Id);
+            SelectedWord = null;
+            await RefreshAsync();
+            StatusMessage = $"Removed “{selected.Word}”.";
+            if (DataChanged is not null)
+                await DataChanged();
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not remove the word: {exception.Message}";
+        }
+        finally { IsBusy = false; }
+    }
+
+    private bool CanEditSelectedWord() => SelectedWord is not null && !IsBusy;
+
+    private void UpdateFilteredWords()
+    {
+        var search = SearchText.Trim();
+        Words.Clear();
+        foreach (var word in _allWords.Where(word =>
+                     word.Word.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                     word.Translation.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                     word.Category.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            Words.Add(word);
+    }
+}

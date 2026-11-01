@@ -1,0 +1,81 @@
+﻿using CommunityToolkit.Mvvm.Input;
+using itdontholdnineitholdfifty.Models;
+using itdontholdnineitholdfifty.Services;
+
+namespace itdontholdnineitholdfifty.ViewModels;
+
+public sealed class ReviewViewModel : ViewModelBase
+{
+    private readonly ILearningService _learningService;
+    private IReadOnlyList<VocabularyWord> _queue = [];
+    private readonly HashSet<int> _reviewedWordIds = [];
+    private VocabularyWord? _currentWord;
+    private bool _isTranslationVisible;
+    private string _queuePositionText = "Loading review queue...";
+    private string _reviewStatus = "Words needing practice appear here first.";
+    private bool _isBusy;
+
+    public VocabularyWord? CurrentWord { get => _currentWord; private set => SetProperty(ref _currentWord, value); }
+    public bool IsTranslationVisible { get => _isTranslationVisible; private set => SetProperty(ref _isTranslationVisible, value); }
+    public string QueuePositionText { get => _queuePositionText; private set => SetProperty(ref _queuePositionText, value); }
+    public string ReviewStatus { get => _reviewStatus; private set => SetProperty(ref _reviewStatus, value); }
+    public IRelayCommand RevealTranslationCommand { get; }
+    public IAsyncRelayCommand MarkKnownCommand { get; }
+    public IAsyncRelayCommand PracticeAgainCommand { get; }
+
+    public ReviewViewModel(ILearningService learningService)
+    {
+        _learningService = learningService;
+        RevealTranslationCommand = new RelayCommand(() => IsTranslationVisible = true);
+        MarkKnownCommand = new AsyncRelayCommand(() => RecordReviewAsync(true), CanReviewCurrentWord);
+        PracticeAgainCommand = new AsyncRelayCommand(() => RecordReviewAsync(false), CanReviewCurrentWord);
+    }
+
+    public async Task RefreshAsync()
+    {
+        _queue = await _learningService.GetReviewWordsAsync(30);
+        _reviewedWordIds.Clear();
+        SetCurrentWord(_queue.FirstOrDefault());
+        ReviewStatus = _queue.Count == 0 ? "Add words to your library to begin reviewing." : "Review the translation, then choose how well you remembered it.";
+    }
+
+    private async Task RecordReviewAsync(bool isCorrect)
+    {
+        if (CurrentWord is not { } word || IsBusy)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            await _learningService.RecordAnswerAsync(word.Id, isCorrect);
+            _reviewedWordIds.Add(word.Id);
+            ReviewStatus = isCorrect ? $"Marked “{word.Word}” as remembered." : $"“{word.Word}” will return for more practice.";
+            SetCurrentWord(_queue.FirstOrDefault(item => !_reviewedWordIds.Contains(item.Id)));
+            if (CurrentWord is null)
+                ReviewStatus = "Review round complete. Your next round will prioritize the words you found difficult.";
+        }
+        catch (Exception exception)
+        {
+            ReviewStatus = $"Could not save this review: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            MarkKnownCommand.NotifyCanExecuteChanged();
+            PracticeAgainCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanReviewCurrentWord() => CurrentWord is not null && !IsBusy;
+
+    private void SetCurrentWord(VocabularyWord? word)
+    {
+        CurrentWord = word;
+        IsTranslationVisible = false;
+        QueuePositionText = word is null
+            ? "No more words in this round"
+            : $"{_reviewedWordIds.Count + 1} of {_queue.Count} words";
+        MarkKnownCommand?.NotifyCanExecuteChanged();
+        PracticeAgainCommand?.NotifyCanExecuteChanged();
+    }
+}

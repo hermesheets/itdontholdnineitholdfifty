@@ -1,0 +1,534 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using itdontholdnineitholdfifty.Data;
+using itdontholdnineitholdfifty.Models;
+using itdontholdnineitholdfifty.Services;
+using System.Collections.ObjectModel;
+
+namespace itdontholdnineitholdfifty.ViewModels;
+
+public partial class MainWindowViewModel : ViewModelBase
+{
+    public const int MaxQuizTries = 3;
+
+    private readonly ObservableCollection<VocabularyWord> _allWords = [];
+    private VocabularyRepository? _repository;
+    private string _searchText = string.Empty;
+    private string _newWord = string.Empty;
+    private string _newTranslation = string.Empty;
+    private string _newExample = string.Empty;
+    private string _editWord = string.Empty;
+    private string _editTranslation = string.Empty;
+    private string _editExample = string.Empty;
+    private string _statusMessage = "Loading your words...";
+    private string _quizAnswer = string.Empty;
+    private string _quizFeedback = string.Empty;
+    private string _scoreSummary = "0 correct answers";
+    private string _accuracyText = "No quiz answers yet";
+    private string _wordsPracticedText = "0 words practiced";
+    private string _hardestWordText = "Start a quiz to see tricky words";
+    private VocabularyWord? _currentCard;
+    private VocabularyWord? _selectedWord;
+    private bool _isAnswerVisible;
+    private bool _isBusy;
+    private bool _isQuestionComplete;
+    private int _questionAttemptCount;
+    private int _questionsAnswered;
+    private int _correctAnswers;
+    private int _wordCoverageValue;
+
+    public MainWindowViewModel()
+    {
+        ToggleAnswerCommand = new RelayCommand(ToggleAnswer);
+        NextCardCommand = new RelayCommand(NextCard, CanMoveToNextCard);
+        StartNewQuizCommand = new RelayCommand(StartNewQuiz, CanStartNewQuiz);
+        TranslateNewWordCommand = new RelayCommand(TranslateNewWord);
+        TranslateEditWordCommand = new RelayCommand(TranslateEditWord);
+        AddWordCommand = new AsyncRelayCommand(AddWordAsync);
+        SaveSelectedWordCommand = new AsyncRelayCommand(SaveSelectedWordAsync, CanEditSelectedWord);
+        DeleteSelectedWordCommand = new AsyncRelayCommand(DeleteSelectedWordAsync, CanEditSelectedWord);
+        SubmitQuizAnswerCommand = new AsyncRelayCommand(SubmitQuizAnswerAsync, CanSubmitQuizAnswer);
+    }
+
+    public ObservableCollection<VocabularyWord> Words { get; } = [];
+    public ObservableCollection<WordProgressItem> WordProgressItems { get; } = [];
+    public IRelayCommand ToggleAnswerCommand { get; }
+    public IRelayCommand NextCardCommand { get; }
+    public IRelayCommand StartNewQuizCommand { get; }
+    public IRelayCommand TranslateNewWordCommand { get; }
+    public IRelayCommand TranslateEditWordCommand { get; }
+    public IAsyncRelayCommand AddWordCommand { get; }
+    public IAsyncRelayCommand SaveSelectedWordCommand { get; }
+    public IAsyncRelayCommand DeleteSelectedWordCommand { get; }
+    public IAsyncRelayCommand SubmitQuizAnswerCommand { get; }
+    public int WordCount => _allWords.Count;
+    public int QuestionsAnswered => _questionsAnswered;
+    public int CorrectAnswers => _correctAnswers;
+    public int WordCoverageValue => _wordCoverageValue;
+    public double QuizTryProgressValue => (double)_questionAttemptCount / MaxQuizTries * 100;
+    public string ScoreSummary
+    {
+        get => _scoreSummary;
+        private set => SetProperty(ref _scoreSummary, value);
+    }
+
+    public string AccuracyText
+    {
+        get => _accuracyText;
+        private set => SetProperty(ref _accuracyText, value);
+    }
+    public string WordsPracticedText => _wordsPracticedText;
+    public string HardestWordText => _hardestWordText;
+    public string QuestionAttemptText => CurrentCard is null
+        ? "No words to quiz yet"
+        : _isQuestionComplete
+            ? $"{_questionAttemptCount} of {MaxQuizTries} tries used"
+            : $"Try {_questionAttemptCount + 1} of {MaxQuizTries}";
+    public string AnswerText => IsAnswerVisible
+        ? CurrentCard?.Translation ?? "No words to practice yet."
+        : "Choose the Russian translation in the Quiz tab.";
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetProperty(ref _searchText, value))
+                UpdateFilteredWords();
+        }
+    }
+
+    public string NewWord
+    {
+        get => _newWord;
+        set => SetProperty(ref _newWord, value);
+    }
+
+    public string NewTranslation
+    {
+        get => _newTranslation;
+        set => SetProperty(ref _newTranslation, value);
+    }
+
+    public string NewExample
+    {
+        get => _newExample;
+        set => SetProperty(ref _newExample, value);
+    }
+
+    public string EditWord
+    {
+        get => _editWord;
+        set => SetProperty(ref _editWord, value);
+    }
+
+    public string EditTranslation
+    {
+        get => _editTranslation;
+        set => SetProperty(ref _editTranslation, value);
+    }
+
+    public string EditExample
+    {
+        get => _editExample;
+        set => SetProperty(ref _editExample, value);
+    }
+
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        set => SetProperty(ref _statusMessage, value);
+    }
+
+    public string QuizAnswer
+    {
+        get => _quizAnswer;
+        set
+        {
+            if (SetProperty(ref _quizAnswer, value))
+                SubmitQuizAnswerCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string QuizFeedback
+    {
+        get => _quizFeedback;
+        set => SetProperty(ref _quizFeedback, value);
+    }
+
+    public VocabularyWord? CurrentCard
+    {
+        get => _currentCard;
+        set
+        {
+            if (SetProperty(ref _currentCard, value))
+            {
+                OnPropertyChanged(nameof(AnswerText));
+                OnPropertyChanged(nameof(QuestionAttemptText));
+                ResetQuizQuestion();
+            }
+        }
+    }
+
+    public VocabularyWord? SelectedWord
+    {
+        get => _selectedWord;
+        set
+        {
+            if (SetProperty(ref _selectedWord, value))
+            {
+                EditWord = value?.Word ?? string.Empty;
+                EditTranslation = value?.Translation ?? string.Empty;
+                EditExample = value?.ExampleSentence ?? string.Empty;
+                SaveSelectedWordCommand.NotifyCanExecuteChanged();
+                DeleteSelectedWordCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsAnswerVisible
+    {
+        get => _isAnswerVisible;
+        set
+        {
+            if (SetProperty(ref _isAnswerVisible, value))
+                OnPropertyChanged(nameof(AnswerText));
+        }
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set
+        {
+            if (SetProperty(ref _isBusy, value))
+            {
+                SaveSelectedWordCommand.NotifyCanExecuteChanged();
+                DeleteSelectedWordCommand.NotifyCanExecuteChanged();
+                SubmitQuizAnswerCommand.NotifyCanExecuteChanged();
+                NextCardCommand.NotifyCanExecuteChanged();
+                StartNewQuizCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public async Task InitializeAsync()
+    {
+        try
+        {
+            _repository = await VocabularyRepository.CreateAsync();
+            var words = await _repository.GetWordsAsync();
+            _allWords.Clear();
+            foreach (var word in words)
+                _allWords.Add(word);
+
+            UpdateFilteredWords();
+            CurrentCard = _allWords.FirstOrDefault();
+            StartNewQuizCommand.NotifyCanExecuteChanged();
+            await RefreshQuizProgressAsync();
+            StatusMessage = $"Ready to learn: {_allWords.Count} beginner words.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not open your word list: {exception.Message}";
+        }
+    }
+
+    private void ToggleAnswer() => IsAnswerVisible = !IsAnswerVisible;
+
+    private void StartNewQuiz()
+    {
+        if (_allWords.Count == 0)
+            return;
+
+        ResetQuizQuestion();
+        CurrentCard = _allWords[Random.Shared.Next(_allWords.Count)];
+    }
+
+    private void NextCard()
+    {
+        if (!CanMoveToNextCard() || _allWords.Count == 0)
+            return;
+
+        var nextIndex = Random.Shared.Next(_allWords.Count);
+        if (_allWords.Count > 1 && _allWords[nextIndex].Id == CurrentCard?.Id)
+            nextIndex = (nextIndex + 1) % _allWords.Count;
+        CurrentCard = _allWords[nextIndex];
+    }
+
+    private void TranslateNewWord()
+    {
+        if (OfflineTranslator.TryTranslate(NewWord, out var translation))
+        {
+            NewTranslation = translation;
+            StatusMessage = "Offline translation found.";
+        }
+        else
+        {
+            StatusMessage = "This word is not in the offline dictionary. Enter its Russian translation manually.";
+        }
+    }
+
+    private void TranslateEditWord()
+    {
+        if (OfflineTranslator.TryTranslate(EditWord, out var translation))
+        {
+            EditTranslation = translation;
+            StatusMessage = "Offline translation found.";
+        }
+        else
+        {
+            StatusMessage = "This word is not in the offline dictionary. Enter its Russian translation manually.";
+        }
+    }
+
+    private async Task AddWordAsync()
+    {
+        var word = NewWord.Trim();
+        var translation = NewTranslation.Trim();
+        if (word.Length == 0 || translation.Length == 0)
+        {
+            StatusMessage = "Enter an English word and Russian translation first.";
+            return;
+        }
+
+        if (_repository is null)
+        {
+            StatusMessage = "The word list is not ready yet.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var newEntry = new VocabularyWord
+            {
+                Word = word,
+                Translation = translation,
+                ExampleSentence = NewExample.Trim(),
+                Category = "My words"
+            };
+
+            await _repository.AddWordAsync(newEntry);
+            _allWords.Add(newEntry);
+            UpdateFilteredWords();
+            CurrentCard ??= newEntry;
+            NewWord = string.Empty;
+            NewTranslation = string.Empty;
+            NewExample = string.Empty;
+            StartNewQuizCommand.NotifyCanExecuteChanged();
+            await RefreshQuizProgressAsync();
+            StatusMessage = $"Added “{word}” to your word list.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not save the word: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task SaveSelectedWordAsync()
+    {
+        var selected = SelectedWord;
+        if (selected is null || _repository is null)
+            return;
+
+        var word = EditWord.Trim();
+        var translation = EditTranslation.Trim();
+        if (word.Length == 0 || translation.Length == 0)
+        {
+            StatusMessage = "An English word and Russian translation are required.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            selected.Word = word;
+            selected.Translation = translation;
+            selected.ExampleSentence = EditExample.Trim();
+            await _repository.UpdateWordAsync(selected);
+            UpdateFilteredWords();
+            SelectedWord = selected;
+            OnPropertyChanged(nameof(CurrentCard));
+            await RefreshQuizProgressAsync();
+            StatusMessage = $"Updated “{word}”。";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not update the word: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task DeleteSelectedWordAsync()
+    {
+        var selected = SelectedWord;
+        if (selected is null || _repository is null)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            await _repository.DeleteWordAsync(selected.Id);
+            _allWords.Remove(selected);
+            if (CurrentCard?.Id == selected.Id)
+                CurrentCard = _allWords.FirstOrDefault();
+            SelectedWord = null;
+            UpdateFilteredWords();
+            StartNewQuizCommand.NotifyCanExecuteChanged();
+            await RefreshQuizProgressAsync();
+            StatusMessage = $"Removed “{selected.Word}”。";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not remove the word: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task SubmitQuizAnswerAsync()
+    {
+        if (!CanSubmitQuizAnswer() || CurrentCard is null || _repository is null)
+            return;
+
+        var currentWord = CurrentCard;
+        var isCorrect = string.Equals(
+            QuizAnswer.Trim(),
+            currentWord.Translation.Trim(),
+            StringComparison.OrdinalIgnoreCase);
+
+        IsBusy = true;
+        try
+        {
+            await _repository.RecordQuizAnswerAsync(currentWord.Id, isCorrect);
+            _questionAttemptCount++;
+            OnPropertyChanged(nameof(QuizTryProgressValue));
+            if (isCorrect)
+            {
+                _isQuestionComplete = true;
+                QuizFeedback = "That's right! Nice work.";
+            }
+            else if (_questionAttemptCount >= MaxQuizTries)
+            {
+                _isQuestionComplete = true;
+                IsAnswerVisible = true;
+                QuizFeedback = $"The answer is {currentWord.Translation}. Choose Next question when you're ready.";
+            }
+            else
+            {
+                QuizFeedback = $"Not quite. Try again — {MaxQuizTries - _questionAttemptCount} tries left.";
+            }
+
+            QuizAnswer = string.Empty;
+            OnPropertyChanged(nameof(QuestionAttemptText));
+        OnPropertyChanged(nameof(QuizTryProgressValue));
+            NextCardCommand.NotifyCanExecuteChanged();
+            await RefreshQuizProgressAsync();
+        }
+        catch (Exception exception)
+        {
+            QuizFeedback = $"Could not save your score: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanEditSelectedWord() => SelectedWord is not null && !IsBusy;
+
+    private bool CanSubmitQuizAnswer() =>
+        CurrentCard is not null &&
+        !IsBusy &&
+        !_isQuestionComplete &&
+        !string.IsNullOrWhiteSpace(QuizAnswer);
+
+    private bool CanMoveToNextCard() => CurrentCard is not null && _isQuestionComplete && !IsBusy;
+
+    private bool CanStartNewQuiz() => _allWords.Count > 0 && !IsBusy;
+
+    private async Task RefreshQuizProgressAsync()
+    {
+        if (_repository is null)
+            return;
+
+        var progress = await _repository.GetQuizProgressAsync();
+        var wordStats = await _repository.GetWordQuizStatsAsync();
+        _questionsAnswered = progress.QuestionsAnswered;
+        _correctAnswers = progress.CorrectAnswers;
+        ScoreSummary = $"{_correctAnswers} correct of {_questionsAnswered} answers";
+        AccuracyText = _questionsAnswered == 0
+            ? "No quiz answers yet"
+            : $"{(double)_correctAnswers / _questionsAnswered:P0} overall accuracy";
+
+        var statsByWordId = wordStats.ToDictionary(stat => stat.VocabularyWordId);
+        var progressItems = _allWords.Select(word =>
+        {
+            statsByWordId.TryGetValue(word.Id, out var stat);
+            return new WordProgressItem(word.Word, word.Translation, stat?.Attempts ?? 0, stat?.Correct ?? 0);
+        }).ToList();
+
+        WordProgressItems.Clear();
+        foreach (var item in progressItems
+                     .OrderBy(item => item.Attempts == 0 ? 1 : 0)
+                     .ThenBy(item => item.Attempts == 0 ? 101 : item.AccuracyValue)
+                     .ThenBy(item => item.Word))
+            WordProgressItems.Add(item);
+
+        var wordsPracticed = progressItems.Count(item => item.Attempts > 0);
+        _wordCoverageValue = _allWords.Count == 0 ? 0 : (int)Math.Round((double)wordsPracticed / _allWords.Count * 100);
+        _wordsPracticedText = $"{wordsPracticed} of {_allWords.Count} words practiced";
+        var hardestWord = progressItems
+            .Where(item => item.Attempts > 0)
+            .OrderBy(item => item.AccuracyValue)
+            .ThenByDescending(item => item.Attempts)
+            .FirstOrDefault();
+        _hardestWordText = hardestWord is null
+            ? "Start a quiz to see tricky words"
+            : $"Practice next: {hardestWord.Word} ({hardestWord.AccuracyText})";
+
+        OnPropertyChanged(nameof(QuestionsAnswered));
+        OnPropertyChanged(nameof(CorrectAnswers));
+        OnPropertyChanged(nameof(WordCoverageValue));
+        OnPropertyChanged(nameof(WordsPracticedText));
+        OnPropertyChanged(nameof(HardestWordText));
+        StartNewQuizCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ResetQuizQuestion()
+    {
+        _questionAttemptCount = 0;
+        _isQuestionComplete = false;
+        QuizAnswer = string.Empty;
+        QuizFeedback = string.Empty;
+        IsAnswerVisible = false;
+        OnPropertyChanged(nameof(QuestionAttemptText));
+        SubmitQuizAnswerCommand.NotifyCanExecuteChanged();
+        NextCardCommand.NotifyCanExecuteChanged();
+    }
+
+    private void UpdateFilteredWords()
+    {
+        var search = SearchText.Trim();
+        var matches = _allWords.Where(word =>
+            word.Word.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            word.Translation.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            word.Category.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+        Words.Clear();
+        foreach (var word in matches)
+            Words.Add(word);
+
+        OnPropertyChanged(nameof(WordCount));
+    }
+}

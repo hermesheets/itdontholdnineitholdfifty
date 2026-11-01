@@ -1,0 +1,91 @@
+﻿using CommunityToolkit.Mvvm.Input;
+using itdontholdnineitholdfifty.Data;
+using itdontholdnineitholdfifty.Services;
+
+namespace itdontholdnineitholdfifty.ViewModels;
+
+public sealed class MainWindowViewModel : ViewModelBase
+{
+    private readonly DashboardViewModel _dashboard;
+    private readonly LibraryViewModel _library;
+    private readonly QuizViewModel _quiz;
+    private readonly AnalyticsViewModel _analytics;
+    private ViewModelBase _currentPage;
+    private string _currentPageTitle = "Overview";
+    private string _statusMessage = "Loading your learning workspace...";
+
+    public MainWindowViewModel(
+        IVocabularyRepository repository,
+        ITranslationService translationService,
+        ILearningService learningService)
+    {
+        _dashboard = new DashboardViewModel(repository, learningService, () => _ = NavigateAsync(_quiz, "Practice"));
+        _library = new LibraryViewModel(repository, translationService);
+        _quiz = new QuizViewModel(repository, learningService);
+        _analytics = new AnalyticsViewModel(repository, learningService);
+        _library.DataChanged = RefreshOtherPagesAsync;
+        _currentPage = _dashboard;
+        NavigateDashboardCommand = new AsyncRelayCommand(() => NavigateAsync(_dashboard, "Overview"));
+        NavigateLibraryCommand = new AsyncRelayCommand(() => NavigateAsync(_library, "Word library"));
+        NavigateQuizCommand = new AsyncRelayCommand(() => NavigateAsync(_quiz, "Practice"));
+        NavigateAnalyticsCommand = new AsyncRelayCommand(() => NavigateAsync(_analytics, "Learning insights"));
+    }
+
+    public ViewModelBase CurrentPage { get => _currentPage; private set => SetProperty(ref _currentPage, value); }
+    public string CurrentPageTitle { get => _currentPageTitle; private set => SetProperty(ref _currentPageTitle, value); }
+    public string StatusMessage { get => _statusMessage; private set => SetProperty(ref _statusMessage, value); }
+    public IAsyncRelayCommand NavigateDashboardCommand { get; }
+    public IAsyncRelayCommand NavigateLibraryCommand { get; }
+    public IAsyncRelayCommand NavigateQuizCommand { get; }
+    public IAsyncRelayCommand NavigateAnalyticsCommand { get; }
+
+    public async Task InitializeAsync()
+    {
+        try
+        {
+            await Task.WhenAll(
+                _library.RefreshAsync(),
+                _quiz.RefreshAsync(),
+                _dashboard.RefreshAsync(),
+                _analytics.RefreshAsync());
+            StatusMessage = "Your learning workspace is ready.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not load your learning workspace: {exception.Message}";
+        }
+    }
+
+    private async Task NavigateAsync(ViewModelBase page, string title)
+    {
+        CurrentPage = page;
+        CurrentPageTitle = title;
+        try
+        {
+            switch (page)
+            {
+                case DashboardViewModel:
+                    await _dashboard.RefreshAsync();
+                    break;
+                case LibraryViewModel:
+                    await _library.RefreshAsync();
+                    break;
+                case QuizViewModel:
+                    await _quiz.RefreshAsync();
+                    break;
+                case AnalyticsViewModel:
+                    await _analytics.RefreshAsync();
+                    break;
+            }
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not refresh {title.ToLowerInvariant()}: {exception.Message}";
+        }
+    }
+
+    private async Task RefreshOtherPagesAsync()
+    {
+        await Task.WhenAll(_dashboard.RefreshAsync(), _quiz.RefreshAsync(), _analytics.RefreshAsync());
+    }
+}

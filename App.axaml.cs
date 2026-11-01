@@ -3,14 +3,19 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
+using itdontholdnineitholdfifty.Data;
+using itdontholdnineitholdfifty.Services;
 using itdontholdnineitholdfifty.ViewModels;
 using itdontholdnineitholdfifty.Views;
+using Microsoft.Extensions.DependencyInjection;
 using System.Linq;
 
 namespace itdontholdnineitholdfifty
 {
     public partial class App : Application
     {
+        private ServiceProvider? _serviceProvider;
+
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
@@ -21,15 +26,29 @@ namespace itdontholdnineitholdfifty
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 DisableAvaloniaDataAnnotationValidation();
-                var viewModel = new MainWindowViewModel();
-                desktop.MainWindow = new MainWindow
-                {
-                    DataContext = viewModel,
-                };
-                _ = viewModel.InitializeAsync();
+                desktop.Exit += (_, _) => _serviceProvider?.Dispose();
+                _ = InitializeDesktopAsync(desktop);
             }
 
             base.OnFrameworkInitializationCompleted();
+        }
+
+        private async Task InitializeDesktopAsync(IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            var repository = await VocabularyRepository.CreateAsync();
+            _serviceProvider = new ServiceCollection()
+                .AddSingleton<IVocabularyRepository>(repository)
+                .AddSingleton<ITranslationService, OfflineTranslationService>()
+                .AddSingleton<IStudyGoalService, StudyGoalService>()
+                .AddSingleton<ILearningService, LearningService>()
+                .AddSingleton<MainWindowViewModel>()
+                .AddSingleton<MainWindow>()
+                .BuildServiceProvider();
+
+            var viewModel = _serviceProvider.GetRequiredService<MainWindowViewModel>();
+            desktop.MainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+            desktop.MainWindow.DataContext = viewModel;
+            await viewModel.InitializeAsync();
         }
 
         private void DisableAvaloniaDataAnnotationValidation()
